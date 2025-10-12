@@ -17,9 +17,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ------------------------------
 # SECURITY SETTINGS
 # ------------------------------
-SECRET_KEY = 'django-insecure-your-secret-key'  # replace with a strong secret in production
+SECRET_KEY = 'Swanith@123'  # replace with a strong secret in production
 DEBUG = True  # Turn off in production
-ALLOWED_HOSTS = []  # Add your production host/domain here
+ALLOWED_HOSTS = ['*']  # Add your production host/domain here
 
 # ------------------------------
 # APPLICATION DEFINITION
