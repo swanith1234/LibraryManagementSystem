@@ -7,7 +7,7 @@ from backend.utils.permissions import require_role
 from backend.utils.pagination import paginate
 from backend.utils.json_utils import to_dict, to_dict_list
 import json
-
+from mongoengine.queryset.visitor import Q
 # -------------------------
 # REGISTER USER
 # -------------------------
@@ -60,7 +60,8 @@ def login_user(request):
     response = JsonResponse({
         "message": "Login successful",
         "user": to_dict(user),
-        "access_token": access_token
+        "access_token": access_token,
+        
     }, status=200)
     response.set_cookie("access_token", access_token, httponly=True, secure=False, samesite="Lax", max_age=60*15)
     response.set_cookie("refresh_token", refresh_token, httponly=True, secure=False, samesite="Lax", max_age=60*60*24*7)
@@ -70,6 +71,7 @@ def login_user(request):
 # -------------------------
 # GET PROFILE
 # -------------------------
+@csrf_exempt
 def get_profile(request):
     user = getattr(request, "user", None)
     if not user:
@@ -109,7 +111,7 @@ def logout_user(request):
 # -------------------------
 # GET ALL USERS (ADMIN)
 # -------------------------
-@require_role("admin")
+@require_role("admin","librarian")
 def get_all_users(request):
     users = User.objects.all()
     return JsonResponse({
@@ -121,9 +123,6 @@ def get_all_users(request):
 # -------------------------
 # GET BORROWED BOOKS (MEMBER)
 # -------------------------
-@require_role("member")
-def get_user_borrowed_books(request):
-    return JsonResponse({"borrowed_books": []}, status=200)
 
 @csrf_exempt
 def refresh_token_view(request):
@@ -333,3 +332,55 @@ def delete_user(request, user_id):
 
     user.delete()
     return JsonResponse({"message": f"User '{user.username}' deleted successfully."}, status=200)
+# library/utils.py or in your views
+
+
+
+@csrf_exempt
+def search_users(request):
+    """
+    Search users by username or email.
+    Expects GET request with query parameter 'q'
+    Returns JSON: { users: [...] }
+    """
+    if request.method != "GET":
+        return JsonResponse({"error": "Only GET method allowed."}, status=405)
+
+    query = request.GET.get("q", "").strip()
+    if not query:
+        return JsonResponse({"error": "Query parameter 'q' is required."}, status=400)
+
+    # Search username or email (case-insensitive)
+    results = User.objects.filter(
+        __raw__={
+            "$or": [
+                {"username": {"$regex": query, "$options": "i"}},
+                {"email": {"$regex": query, "$options": "i"}},
+            ]
+        }
+    )
+
+    users_list = [
+        {
+            "id": str(user.id),
+            "username": user.username,
+            "email": user.email,
+        }
+        for user in results
+    ]
+
+    return JsonResponse({"users": users_list})
+
+@require_role("admin", "librarian")
+@csrf_exempt
+def get_user_profile(request, user_id):
+    """
+    Fetch profile details for a specific user.
+    Only accessible by admins and librarians.
+    """
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "User not found"}, status=404)
+
+    return JsonResponse({"user": to_dict(user)}, status=200)

@@ -39,9 +39,19 @@ class Book(Document):
 
     # Waitlist (list of user IDs waiting for the book)
     waitlist = ListField(StringField())
-
+    related_books=ListField(ReferenceField('self'))
     # Timestamps
     created_at = DateTimeField(default=datetime.utcnow)
+    meta = {
+        "indexes": [
+            # Full-text search on relevant fields
+            {"fields": ["$title", "$author", "$category", "$publisher"], "default_language": "english"},
+            # Optional: single-field indexes for filtering
+            "category",
+            "author",
+            "published_year",
+        ]
+    }
 
     def __str__(self):
         return f"{self.title} ({self.edition}) by {self.author}"
@@ -77,6 +87,15 @@ class BookCopy(Document):
     last_borrowed_at = DateTimeField()
     
     vendor = StringField(max_length=100)
+    meta = {
+    "indexes": [
+        {"fields": ["$barcode", "$vendor"], "default_language": "english"},
+        "is_available",
+        "is_damaged",
+        "condition",
+        "vendor",
+    ]
+}
 
     def __str__(self):
         return f"{self.book.title} - Copy: {self.barcode}"

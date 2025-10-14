@@ -13,10 +13,11 @@ urlpatterns = [
     path('profile/update/', views.update_profile, name='update_profile'),
 
     # Admin-only endpoints
+    path('search/', views.search_users, name='search_users'),
     path('all-users/', views.get_all_users, name='get_all_users'),
 
     # Member-only endpoints
-    path('borrowed-books/', views.get_user_borrowed_books, name='get_user_borrowed_books'),
+    
     path('update-role/', views.update_user_role, name='update_user_role'),  # Admin can update user roles
     path('delete-user/', views.delete_user, name='delete_user'),  # Admin can delete users
    # Send password reset email
@@ -26,5 +27,6 @@ path("forgot-password/", views.forgot_password, name="forgot_password"),
 path("reset-password/", views.reset_password, name="reset_password"),
 # Admin updates user role
 path("update-role/<str:user_id>/", views.update_user_role, name="update_user_role"),
+path('profile/<str:user_id>', views.get_user_profile, name='get_user_profile'),
 
 ]

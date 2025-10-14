@@ -5,7 +5,7 @@ from .models import Book, BookCopy
 import json
 from datetime import datetime
 from backend.utils.permissions import require_role
-
+from mongoengine.queryset.visitor import Q
 # -----------------------------------
 # Helper function for parsing JSON safely
 # -----------------------------------
@@ -70,21 +70,25 @@ def create_book(request):
 
 @csrf_exempt
 def list_books(request):
-    """List all books with filtering, search, and pagination."""
+    """
+    Production-ready book listing API:
+    - Full-text search
+    - Faceted filtering (category, author, price, published_year)
+    - Cursor-based pagination (optional)
+    - Ready for recommendation integration
+    """
     if request.method != "GET":
         return JsonResponse({"error": "Invalid HTTP method"}, status=405)
 
     query = {}
 
     # -----------------------------
-    # Filtering
+    # Faceted Filtering
     # -----------------------------
-    if "author" in request.GET:
-        query["author__icontains"] = request.GET["author"]
-    if "title" in request.GET:
-        query["title__icontains"] = request.GET["title"]
     if "category" in request.GET:
         query["category__icontains"] = request.GET["category"]
+    if "author" in request.GET:
+        query["author__icontains"] = request.GET["author"]
     if "price_min" in request.GET:
         query["price__gte"] = int(request.GET["price_min"])
     if "price_max" in request.GET:
@@ -95,48 +99,69 @@ def list_books(request):
     # -----------------------------
     # Full-text Search
     # -----------------------------
-    if "search" in request.GET:
-        search_text = request.GET["search"]
-        query["$or"] = [
-            {"title__icontains": search_text},
-            {"author__icontains": search_text},
-            {"category__icontains": search_text},
-        ]
+    search_text = request.GET.get("search")
+    if search_text:
+        books = Book.objects(**query).search_text(search_text).order_by("$text_score")
+    else:
+        books = Book.objects(**query).order_by("-created_at")
 
     # -----------------------------
-    # Pagination
+    # Cursor-based Pagination (optional)
     # -----------------------------
-    page = int(request.GET.get("page", 1))
-    page_size = int(request.GET.get("page_size", 10))
-    start = (page - 1) * page_size
-    end = start + page_size
+    page_size = request.GET.get("page_size")
+    last_id = request.GET.get("last_id")  # cursor for pagination
+    if page_size:  # only apply pagination if page_size is provided
+        page_size = int(page_size)
+        if last_id:
+            books = books.filter(id__lt=last_id)
+        books = books[:page_size]  # slice for pagination
 
-    books = Book.objects(**query).order_by("-created_at")[start:end]
-
-    result = []
-    for b in books:
-        result.append({
+    # -----------------------------
+    # Response
+    # -----------------------------
+    result = [
+        {
             "id": str(b.id),
             "title": b.title,
             "author": b.author,
             "category": b.category,
-            "edition": b.edition,
-            "publisher": b.publisher,
-            "published_year": b.published_year,
-            "price": b.price,
-            "location": b.location,
-            "isbn": b.isbn,
             "language": b.language,
-            "no_of_pages": b.no_of_pages,
             "cover_image_url": b.cover_image_url,
-            "ebook_url": b.ebook_url,
-            "total_copies": b.total_copies,
-            "available_copies": b.available_copies,
-            "waitlist": b.waitlist,
-            "created_at": b.created_at.isoformat(),
-        })
+            "related_books": b.related_books,  # placeholder for recommendations
+        }
+        for b in books
+    ]
 
     return JsonResponse(result, safe=False)
+
+@csrf_exempt
+def homepage_books(request):
+    """
+    Netflix-style homepage API:
+    - Returns categories with a few top books per category
+    """
+    if request.method != "GET":
+        return JsonResponse({"error": "Invalid HTTP method"}, status=405)
+
+    # Get top categories (later, can be recommendation-driven)
+    categories = Book.objects.distinct("category")[:10]
+
+    result = {}
+    for cat in categories:
+        books = Book.objects(category__icontains=cat).order_by("-created_at")[:10]
+        result[cat] = [
+            {
+                "id": str(b.id),
+                "title": b.title,
+                "author": b.author,
+                "category": b.category,
+                "cover_image_url": b.cover_image_url,
+                "related_books": getattr(b, "related_books", []),
+            }
+            for b in books
+        ]
+
+    return JsonResponse(result)
 
 
 @csrf_exempt
@@ -222,7 +247,7 @@ def delete_book(request, book_id):
 # 📖 BOOK COPY CRUD OPERATIONS
 # ==========================================================
 
-@require_role('admin')
+@require_role('admin','librarian')
 @csrf_exempt
 def create_book_copy(request):
     """Create a new Book Copy"""
@@ -259,72 +284,91 @@ def create_book_copy(request):
 
 
 @csrf_exempt
+
+
 def list_book_copies(request):
-    """List BookCopies with advanced filtering, search, and pagination"""
+    """
+    Advanced BookCopy listing API:
+    - Full-text search (barcode, vendor)
+    - Faceted filtering (availability, damage, condition)
+    - Pagination
+    - Returns counts and items
+    """
     if request.method != "GET":
         return JsonResponse({"error": "Invalid HTTP method"}, status=405)
 
-    query = {}
+    # Base query
+    query = Q()
 
-    # ----------------------
-    # Filters
-    # ----------------------
-    if "vendor" in request.GET:
-        query["vendor__icontains"] = request.GET["vendor"]
-    if "is_available" in request.GET:
-        query["is_available"] = request.GET["is_available"].lower() == "true"
-    if "is_damaged" in request.GET:
-        query["is_damaged"] = request.GET["is_damaged"].lower() == "true"
-    if "condition" in request.GET:
-        query["condition__icontains"] = request.GET["condition"]
+    # ----------------------------------------
+    # 🔍 Faceted Filters
+    # ----------------------------------------
+    vendor = request.GET.get("vendor")
+    if vendor:
+        query &= Q(vendor__icontains=vendor)
 
-    # Date filters
-   
+    is_available = request.GET.get("is_available")
+    if is_available is not None:
+        query &= Q(is_available=is_available.lower() == "true")
 
-    # ----------------------
-    # Full-text search (Book related)
-    # ----------------------
-    if "search" in request.GET:
-        search_text = request.GET["search"]
-        query["$or"] = [
-            {"barcode__icontains": search_text},
-            {"book.title__icontains": search_text},
-            {"book.author__icontains": search_text},
-            {"book.category__icontains": search_text},
-        ]
+    is_damaged = request.GET.get("is_damaged")
+    if is_damaged is not None:
+        query &= Q(is_damaged=is_damaged.lower() == "true")
 
-    # ----------------------
-    # Pagination
-    # ----------------------
+    condition = request.GET.get("condition")
+    if condition:
+        query &= Q(condition__icontains=condition)
+
+    # ----------------------------------------
+    # 🧠 Search Support (using text index)
+    # ----------------------------------------
+    search_text = request.GET.get("search")
+    print("Search Text:", search_text)
+    if search_text:
+        # Use MongoDB’s text search (requires the text index you defined)
+        copies = BookCopy.objects.search_text(search_text).filter(query).order_by("$text_score", "-added_at")
+        print("Search Results:", copies)
+    else:
+        copies = BookCopy.objects(query).order_by("-added_at")
+
+    # ----------------------------------------
+    # 📄 Pagination
+    # ----------------------------------------
     page = int(request.GET.get("page", 1))
     page_size = int(request.GET.get("page_size", 10))
+
+    total = copies.count()
     start = (page - 1) * page_size
     end = start + page_size
+    copies = copies[start:end]
 
-    # ----------------------
-    # Fetch BookCopies
-    # ----------------------
-    copies = BookCopy.objects(**query)[start:end]
-
-    result = [
-        {
+    # ----------------------------------------
+    # 📦 Response Data
+    # ----------------------------------------
+    result = []
+    for c in copies:
+        result.append({
             "id": str(c.id),
-            "book_id": str(c.book.id),
-            "book_title": c.book.title,
             "barcode": c.barcode,
+            "vendor": c.vendor,
+            "condition": c.condition,
             "is_available": c.is_available,
             "is_damaged": c.is_damaged,
-            "condition": c.condition,
             "remarks": c.remarks,
-            "last_borrowed_at": c.last_borrowed_at.isoformat() if c.last_borrowed_at else None,
-            
-            "vendor": c.vendor,
             "added_at": c.added_at.isoformat(),
-        }
-        for c in copies
-    ]
+            "last_borrowed_at": c.last_borrowed_at.isoformat() if c.last_borrowed_at else None,
+            "book_id": str(c.book.id) if c.book else None,
+            "book_title": c.book.title if c.book else None,
+            "book_author": c.book.author if c.book else None,
+            "book_category": c.book.category if c.book else None,
+        })
 
-    return JsonResponse(result, safe=False)
+    return JsonResponse({
+        "items": result,
+        "total": total,
+        "total_pages": (total + page_size - 1) // page_size,
+        "current_page": page,
+    })
 
 @csrf_exempt
 def get_book_copy(request, copy_id):
@@ -388,13 +432,26 @@ def update_book_copy(request, copy_id):
 @require_role('librarian')
 @csrf_exempt
 def delete_book_copy(request, copy_id):
-    """Delete a Book Copy"""
+    """Delete a Book Copy and update the corresponding Book counts"""
     if request.method == "DELETE":
         try:
             copy = BookCopy.objects.get(id=copy_id)
-            copy.delete()
+            book = copy.book  # Get the associated Book
+
+            # Decrement counts safely
+            if book.total_copies > 0:
+                book.total_copies -= 1
+
+            if copy.is_available and book.available_copies > 0:
+                book.available_copies -= 1
+
+            book.save()  # Save the updated counts
+
+            copy.delete()  # Delete the copy itself
             return JsonResponse({"message": "Book copy deleted successfully"})
+
         except DoesNotExist:
             return JsonResponse({"error": "Book copy not found"}, status=404)
 
     return JsonResponse({"error": "Invalid HTTP method"}, status=405)
+

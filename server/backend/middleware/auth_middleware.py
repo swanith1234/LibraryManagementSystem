@@ -22,6 +22,7 @@ class JWTAuthenticationMiddleware:
             "/api/users/refresh-token/",
             "/api/users/forgot-password/",
             "/api/users/reset-password/",
+         
             "/admin/",  # optional
             "/healthcheck/",
         ]
