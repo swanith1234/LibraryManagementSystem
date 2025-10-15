@@ -233,7 +233,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route path="/profile/:id" element={<MemberProfile />} />
+      <Route path="/profile/:userId" element={<MemberProfile />} />
 
       <Route path="/books/:bookId" element={<BookDetails />} />
       <Route path="*" element={<NotFound />} />

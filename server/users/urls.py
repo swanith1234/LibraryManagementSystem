@@ -27,6 +27,7 @@ path("forgot-password/", views.forgot_password, name="forgot_password"),
 path("reset-password/", views.reset_password, name="reset_password"),
 # Admin updates user role
 path("update-role/<str:user_id>/", views.update_user_role, name="update_user_role"),
-path('profile/<str:user_id>', views.get_user_profile, name='get_user_profile'),
+path('profile/<str:user_id>/', views.get_user_profile, name='get_user_profile'),
+ path("dashboard/summary/", views.dashboard_summary, name="dashboard-summary"),
 
 ]

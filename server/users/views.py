@@ -8,6 +8,12 @@ from backend.utils.pagination import paginate
 from backend.utils.json_utils import to_dict, to_dict_list
 import json
 from mongoengine.queryset.visitor import Q
+from datetime import datetime, timedelta
+
+from datetime import datetime, timedelta
+from books.models import Book, BookCopy
+from borrow.models import BorrowRecord
+from users.models import User
 # -------------------------
 # REGISTER USER
 # -------------------------
@@ -76,7 +82,7 @@ def get_profile(request):
     user = getattr(request, "user", None)
     if not user:
         return JsonResponse({"error": "Authentication required"}, status=401)
-    return JsonResponse(to_dict(user), status=200)
+    return JsonResponse({"user": to_dict(user)}, status=200)  # ✅ Wrapped in "user"
 
 
 # -------------------------
@@ -384,3 +390,119 @@ def get_user_profile(request, user_id):
         return JsonResponse({"error": "User not found"}, status=404)
 
     return JsonResponse({"user": to_dict(user)}, status=200)
+ # assuming you have this decorator
+
+
+
+
+@csrf_exempt
+def dashboard_summary(request):
+    """
+    Returns all metrics needed for the admin/librarian dashboard.
+    """
+    try:
+        today = datetime.utcnow()
+        days_30_ago = today - timedelta(days=30)
+
+        # ------------------------------
+        # 1️⃣ Users
+        # ------------------------------
+        total_users = User.objects.count()
+        new_users_last_30_days = User.objects(created_at__gte=days_30_ago).count()
+
+        roles = ["member", "librarian", "admin"]
+        role_distribution = {role: User.objects(role=role).count() for role in roles}
+
+        # ------------------------------
+        # 2️⃣ Books
+        # ------------------------------
+        total_books = Book.objects.count()
+
+        # Book availability (using total_copies & available_copies fields)
+        books_availability = []
+        for book in Book.objects:
+            total_copies = book.total_copies
+            available_copies = book.available_copies
+            borrowed_count = total_copies - available_copies
+
+            books_availability.append({
+                "title": book.title,
+                "total_copies": total_copies,
+                "borrowed": borrowed_count,
+                "available": available_copies
+            })
+
+        # ------------------------------
+        # 3️⃣ Borrows / Transactions
+        # ------------------------------
+        active_borrows = BorrowRecord.objects(returned=False).count()
+        total_transactions = BorrowRecord.objects.count()
+
+        overdue = BorrowRecord.objects(returned=False, due_date__lt=today).count()
+        status_distribution = {
+            "active": active_borrows,
+            "returned": total_transactions - active_borrows,
+            "overdue": overdue
+        }
+
+        # Borrow trend last 30 days
+        borrow_trend = []
+        for i in range(30):
+            day = today - timedelta(days=i)
+            start_day = datetime(day.year, day.month, day.day)
+            end_day = start_day + timedelta(days=1)
+
+            borrows = BorrowRecord.objects(borrow_date__gte=start_day, borrow_date__lt=end_day).count()
+            returns = BorrowRecord.objects(return_date__gte=start_day, return_date__lt=end_day).count()
+            overdue_count = BorrowRecord.objects(returned=False, due_date__lt=end_day, borrow_date__lt=end_day).count()
+
+            borrow_trend.append({
+                "date": start_day.strftime("%Y-%m-%d"),
+                "borrows": borrows,
+                "returns": returns,
+                "overdue": overdue_count
+            })
+        borrow_trend.reverse()
+
+        # Top 5 borrowed books
+        top_books_agg = BorrowRecord.objects.aggregate([
+            {"$group": {"_id": "$book", "borrow_count": {"$sum": 1}}},
+            {"$sort": {"borrow_count": -1}},
+            {"$limit": 5}
+        ])
+        top_books = []
+        for b in top_books_agg:
+            book_obj = Book.objects(id=b["_id"]).first()
+            top_books.append({
+                "title": book_obj.title if book_obj else "Unknown",
+                "borrow_count": b["borrow_count"]
+            })
+
+        # Average borrow duration (days)
+        borrowed_records = BorrowRecord.objects(returned=True)
+        total_days, count_records = 0, 0
+        for br in borrowed_records:
+            if br.borrow_date and br.return_date:
+                total_days += (br.return_date - br.borrow_date).days
+                count_records += 1
+        avg_borrow_duration = (total_days / count_records) if count_records else 0
+
+        # ------------------------------
+        # Return all data
+        # ------------------------------
+        return JsonResponse({
+            "total_users": total_users,
+            "new_users_last_30_days": new_users_last_30_days,
+            "role_distribution": role_distribution,
+            "total_books": total_books,
+            "books_availability": books_availability,
+            "active_borrows": active_borrows,
+            "total_transactions": total_transactions,
+            "status_distribution": status_distribution,
+            "borrow_trend": borrow_trend,
+            "top_books": top_books,
+            "avg_borrow_duration": round(avg_borrow_duration, 2)
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)

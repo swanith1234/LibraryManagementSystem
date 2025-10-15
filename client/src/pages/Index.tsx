@@ -1,24 +1,27 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Library, BookOpen, Users, Shield } from 'lucide-react';
-import { Link } from 'react-router-dom';
-
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Library, BookOpen, Users, Shield } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useState } from "react";
 const Index = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [hasRedirected, setHasRedirected] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      const redirectPath = user.role === 'admin' 
-        ? '/admin/dashboard'
-        : user.role === 'librarian'
-        ? '/librarian/dashboard'
-        : '/member/browse';
+    if (user && !hasRedirected) {
+      const redirectPath =
+        user.role === "admin"
+          ? "/admin/dashboard"
+          : user.role === "librarian"
+          ? "/librarian/dashboard"
+          : "/member/browse";
       navigate(redirectPath, { replace: true });
+      setHasRedirected(true);
     }
-  }, [user, navigate]);
+  }, [user, navigate, hasRedirected]);
 
   if (user) {
     return null;
@@ -83,7 +86,8 @@ const Index = () => {
             </div>
             <h3 className="mb-2 text-xl font-semibold">Book Management</h3>
             <p className="text-muted-foreground">
-              Easily manage your entire book collection with powerful search and organization tools.
+              Easily manage your entire book collection with powerful search and
+              organization tools.
             </p>
           </div>
 
@@ -93,7 +97,8 @@ const Index = () => {
             </div>
             <h3 className="mb-2 text-xl font-semibold">User Roles</h3>
             <p className="text-muted-foreground">
-              Role-based access for admins, librarians, and members with tailored experiences.
+              Role-based access for admins, librarians, and members with
+              tailored experiences.
             </p>
           </div>
 
@@ -103,7 +108,8 @@ const Index = () => {
             </div>
             <h3 className="mb-2 text-xl font-semibold">Secure & Scalable</h3>
             <p className="text-muted-foreground">
-              Built with security in mind and ready to scale from small libraries to large institutions.
+              Built with security in mind and ready to scale from small
+              libraries to large institutions.
             </p>
           </div>
         </div>

@@ -60,20 +60,30 @@ export default function MemberProfile() {
     setLoading(true);
     try {
       let profileRes, borrowsRes;
-
+      console.log("user id", userId);
       // 🔹 If admin or librarian — fetch specific user's profile
       if (userId && (user?.role === "admin" || user?.role === "librarian")) {
         profileRes = await usersAPI.getUserProfile(userId);
-        borrowsRes = await borrowAPI.borrowHistory(userId, 1, 10);
+        console.log("res", profileRes);
+        borrowsRes = await borrowAPI.borrowHistory({
+          user_id: userId,
+          page: 1,
+          limit: 10,
+        });
       } else {
         // 🔹 If member — fetch their own profile
         profileRes = await authAPI.getProfile();
-        console.log("Fetching own profile", profileRes);
-        borrowsRes = await borrowAPI.borrowHistory(user?.id, 1, 10);
+
+        borrowsRes = await borrowAPI.borrowHistory({
+          user_id: user.id,
+          page: 1,
+          limit: 10,
+        });
+        console.log("res", profileRes);
         console.log("b", borrowsRes);
       }
 
-      setProfile(profileRes.data);
+      setProfile(profileRes.data.user);
       console.log(borrowsRes.data);
       setBorrowRecords(borrowsRes.data.records || borrowsRes.data);
     } catch (error) {
@@ -91,7 +101,6 @@ export default function MemberProfile() {
   );
 
   const getInitials = () => {
-    console.log("pro", profile);
     if (profile?.first_name && profile?.last_name) {
       return `${profile.first_name[0]}${profile.last_name[0]}`.toUpperCase();
     }
@@ -313,9 +322,7 @@ export default function MemberProfile() {
                           ? format(new Date(record.return_date), "MMM dd, yyyy")
                           : "-"}
                       </TableCell>
-                      <TableCell>
-                        {record.fine ? `$${record.fine.toFixed(2)}` : "-"}
-                      </TableCell>
+                      <TableCell>{record.fine}</TableCell>
                       <TableCell>{record.condition_on_return || "-"}</TableCell>
                       <TableCell className="max-w-xs truncate">
                         {record.remarks || "-"}

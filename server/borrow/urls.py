@@ -22,5 +22,5 @@ urlpatterns = [
     path("member-summary/<str:user_identifier>/", views.librarian_view_member_summary),
     path("calculate-fine/", views.get_fine,name="get_fine"),  # POST → calculate fine for a borrow record
     path("search/", views.search_borrows, name="search_borrows"),  # GET → search borrow records by user or book
-     path('/borrow-history/', views.get_user_borrow_history, name='get_user_borrow_history'),
+     path('borrow-history/', views.get_user_borrow_history, name='get_user_borrow_history'),
 ]

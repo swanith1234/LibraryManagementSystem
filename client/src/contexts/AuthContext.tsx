@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       const response = await authAPI.getProfile();
-      setUser(response.data);
+      setUser(response.data.user);
     } catch (error) {
       console.error("Failed to fetch user:", error);
       localStorage.removeItem("access_token");
@@ -131,6 +131,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
+
   if (!context) {
     throw new Error("useAuth must be used within AuthProvider");
   }
