@@ -42,5 +42,5 @@ class JWTAuthenticationMiddleware:
 
         if request.user is None:
             return JsonResponse({"error": "Invalid or expired token"}, status=401)
-
+        
         return self.get_response(request)

@@ -18,73 +18,40 @@ import { format } from "date-fns";
 import { User, Mail, Shield, Calendar, Phone, MapPin } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
-interface UserProfile {
-  id: string;
-  username: string;
-  email: string;
-  first_name?: string;
-  last_name?: string;
-  role: string;
-  phone?: string;
-  address?: string;
-  created_at?: string;
-}
-
-interface BorrowRecord {
-  _id: string;
-  book_title: string;
-  barcode: string;
-  borrow_date: string;
-  due_date?: string;
-  return_date?: string;
-  status: string;
-  returned?: boolean;
-  fine?: number;
-  condition_on_return?: string;
-  remarks?: string;
-}
-
 export default function MemberProfile() {
   const { user } = useAuth();
   const { userId } = useParams<{ userId: string }>();
 
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [borrowRecords, setBorrowRecords] = useState<BorrowRecord[]>([]);
+  const [profile, setProfile] = useState(null);
+  const [borrowRecords, setBorrowRecords] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchProfileData();
+    // eslint-disable-next-line
   }, [userId]);
 
   const fetchProfileData = async () => {
     setLoading(true);
     try {
       let profileRes, borrowsRes;
-      console.log("user id", userId);
-      // 🔹 If admin or librarian — fetch specific user's profile
+      // Admin/librarian can fetch for any user; member = self
       if (userId && (user?.role === "admin" || user?.role === "librarian")) {
         profileRes = await usersAPI.getUserProfile(userId);
-        console.log("res", profileRes);
         borrowsRes = await borrowAPI.borrowHistory({
           user_id: userId,
           page: 1,
           limit: 10,
         });
       } else {
-        // 🔹 If member — fetch their own profile
         profileRes = await authAPI.getProfile();
-
         borrowsRes = await borrowAPI.borrowHistory({
           user_id: user.id,
           page: 1,
           limit: 10,
         });
-        console.log("res", profileRes);
-        console.log("b", borrowsRes);
       }
-
       setProfile(profileRes.data.user);
-      console.log(borrowsRes.data);
       setBorrowRecords(borrowsRes.data.records || borrowsRes.data);
     } catch (error) {
       toast.error("Failed to fetch profile data");
@@ -104,18 +71,23 @@ export default function MemberProfile() {
     if (profile?.first_name && profile?.last_name) {
       return `${profile.first_name[0]}${profile.last_name[0]}`.toUpperCase();
     }
-
     return profile?.username?.[0]?.toUpperCase() || "U";
   };
 
-  const getRoleBadge = (role: string) => {
-    const variants: Record<string, "default" | "secondary" | "outline"> = {
+  const getRoleBadge = (role = "member") => {
+    const variants = {
       admin: "default",
       librarian: "secondary",
       member: "outline",
     };
     return (
-      <Badge variant={variants[role.toLowerCase()] || "outline"}>{role}</Badge>
+      <Badge
+        variant={variants[role.toLowerCase()] || "outline"}
+        className="inline-flex gap-1 items-center text-base px-2"
+      >
+        <Shield className="inline-block w-4 h-4 mr-1" />
+        {role.charAt(0).toUpperCase() + role.slice(1)}
+      </Badge>
     );
   };
 
@@ -138,15 +110,21 @@ export default function MemberProfile() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">
-        {userId ? "User Profile" : "My Profile"}
-      </h1>
+    <div className="space-y-8 max-w-4xl mx-auto">
+      {/* Title */}
+      <div className="mb-2">
+        <h1 className="text-3xl font-bold flex gap-2 items-center">
+          {userId ? "User Profile" : "My Profile"}
+        </h1>
+        <div className="text-muted-foreground text-base">
+          Overview of user info and borrow history
+        </div>
+      </div>
 
       {/* Profile Card */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col items-center space-y-4">
+      <Card className="shadow-sm">
+        <CardHeader className="pt-6 pb-0">
+          <div className="flex flex-col items-center space-y-3">
             <Avatar className="h-24 w-24">
               <AvatarImage src="" alt={profile?.username} />
               <AvatarFallback className="text-2xl">
@@ -154,187 +132,183 @@ export default function MemberProfile() {
               </AvatarFallback>
             </Avatar>
             <div className="text-center">
-              <h2 className="text-2xl font-bold">
+              <h2 className="text-2xl font-bold flex gap-1 justify-center items-center">
                 {profile?.first_name && profile?.last_name
                   ? `${profile.first_name} ${profile.last_name}`
                   : profile?.username}
+                {getRoleBadge(profile?.role)}
               </h2>
-              <p className="text-muted-foreground">{profile?.email}</p>
-              <div className="mt-2">
-                {getRoleBadge(profile?.role || "member")}
-              </div>
+              <p className="text-muted-foreground text-base mt-1">
+                {profile?.email}
+              </p>
             </div>
           </div>
         </CardHeader>
-
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="flex items-center space-x-3">
-              <User className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Username</p>
-                <p className="font-medium">{profile?.username}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-3">
-              <Mail className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Email</p>
-                <p className="font-medium">{profile?.email}</p>
-              </div>
-            </div>
-
+        <CardContent className="pt-0 pb-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            <ProfileInfo
+              icon={<User />}
+              title="Username"
+              value={profile?.username}
+            />
+            <ProfileInfo icon={<Mail />} title="Email" value={profile?.email} />
             {profile?.created_at && (
-              <div className="flex items-center space-x-3">
-                <Calendar className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Member Since</p>
-                  <p className="font-medium">
-                    {format(new Date(profile.created_at), "MMM dd, yyyy")}
-                  </p>
-                </div>
-              </div>
+              <ProfileInfo
+                icon={<Calendar />}
+                title="Member Since"
+                value={format(new Date(profile.created_at), "MMM dd, yyyy")}
+              />
             )}
-
             {profile?.phone && (
-              <div className="flex items-center space-x-3">
-                <Phone className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Phone</p>
-                  <p className="font-medium">{profile.phone}</p>
-                </div>
-              </div>
+              <ProfileInfo
+                icon={<Phone />}
+                title="Phone"
+                value={profile.phone}
+              />
             )}
-
             {profile?.address && (
-              <div className="flex items-center space-x-3 md:col-span-2">
-                <MapPin className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Address</p>
-                  <p className="font-medium">{profile.address}</p>
-                </div>
-              </div>
+              <ProfileInfo
+                icon={<MapPin />}
+                title="Address"
+                value={profile.address}
+                full
+              />
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Active Borrows */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Active Borrows</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Book Title</TableHead>
-                  <TableHead>Barcode</TableHead>
-                  <TableHead>Borrow Date</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {activeBorrows.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={5}
-                      className="text-center text-muted-foreground"
-                    >
-                      No active borrows
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  activeBorrows.map((record) => (
-                    <TableRow key={record._id}>
-                      <TableCell className="font-medium">
-                        {record.book_title}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {record.barcode}
-                      </TableCell>
-                      <TableCell>
-                        {format(new Date(record.borrow_date), "MMM dd, yyyy")}
-                      </TableCell>
-                      <TableCell>
-                        {record.due_date
-                          ? format(new Date(record.due_date), "MMM dd, yyyy")
-                          : "-"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="default">Borrowed</Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* --- Active Borrows --- */}
+      <SectionCard
+        title="Active Borrows"
+        subtitle="Books currently borrowed and not yet returned"
+        emptyMessage="No active borrows"
+      >
+        <BorrowTable
+          records={activeBorrows}
+          columns={[
+            { key: "book_title", label: "Book Title" },
+            { key: "barcode", label: "Barcode", mono: true },
+            { key: "borrow_date", label: "Borrow Date", date: true },
+            { key: "due_date", label: "Due Date", date: true },
+            { key: "status", label: "Status", badge: "Borrowed" },
+          ]}
+        />
+      </SectionCard>
 
-      {/* Returned Borrows */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Returned Books</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Book Title</TableHead>
-                  <TableHead>Barcode</TableHead>
-                  <TableHead>Borrow Date</TableHead>
-                  <TableHead>Return Date</TableHead>
-                  <TableHead>Fine</TableHead>
-                  <TableHead>Condition</TableHead>
-                  <TableHead>Remarks</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {returnedBorrows.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={7}
-                      className="text-center text-muted-foreground"
-                    >
-                      No returned books
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  returnedBorrows.map((record) => (
-                    <TableRow key={record._id}>
-                      <TableCell className="font-medium">
-                        {record.book_title}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {record.barcode}
-                      </TableCell>
-                      <TableCell>
-                        {format(new Date(record.borrow_date), "MMM dd, yyyy")}
-                      </TableCell>
-                      <TableCell>
-                        {record.return_date
-                          ? format(new Date(record.return_date), "MMM dd, yyyy")
-                          : "-"}
-                      </TableCell>
-                      <TableCell>{record.fine}</TableCell>
-                      <TableCell>{record.condition_on_return || "-"}</TableCell>
-                      <TableCell className="max-w-xs truncate">
-                        {record.remarks || "-"}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* --- Returned Borrows --- */}
+      <SectionCard
+        title="Returned Books"
+        subtitle="Books returned in the past"
+        emptyMessage="No returned books"
+      >
+        <BorrowTable
+          records={returnedBorrows}
+          columns={[
+            { key: "book_title", label: "Book Title" },
+            { key: "barcode", label: "Barcode", mono: true },
+            { key: "borrow_date", label: "Borrow Date", date: true },
+            { key: "return_date", label: "Return Date", date: true },
+            { key: "fine", label: "Fine" },
+            { key: "condition_on_return", label: "Condition" },
+            { key: "remarks", label: "Remarks", truncate: true },
+          ]}
+        />
+      </SectionCard>
+    </div>
+  );
+}
+
+// --- Helper Components ---
+
+function ProfileInfo({ icon, title, value, full = false }) {
+  return (
+    <div
+      className={`flex items-center space-x-3 ${full ? "md:col-span-2" : ""}`}
+    >
+      <span className="text-muted-foreground">{icon}</span>
+      <div>
+        <div className="text-sm text-muted-foreground">{title}</div>
+        <div className="font-medium">{value || "-"}</div>
+      </div>
+    </div>
+  );
+}
+
+function SectionCard({ title, subtitle, emptyMessage, children }) {
+  return (
+    <Card className="shadow-sm">
+      <CardHeader className="pb-2 pt-3">
+        <CardTitle className="text-lg">{title}</CardTitle>
+        <div className="text-muted-foreground text-sm pl-1">{subtitle}</div>
+      </CardHeader>
+      <CardContent className="pt-0 pb-4">
+        {children}
+        {/* Only show empty message if children renders no records */}
+        {Array.isArray(children?.props?.records) &&
+          children.props.records.length === 0 && (
+            <div className="mt-2 text-muted-foreground text-center">
+              {emptyMessage}
+            </div>
+          )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function BorrowTable({ records, columns }) {
+  return (
+    <div className="rounded-md border overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted text-base">
+            {columns.map((col) => (
+              <TableHead
+                key={col.key}
+                className={col.mono ? "font-mono text-xs" : ""}
+              >
+                {col.label}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {records.length === 0 ? (
+            <TableRow>
+              <TableCell
+                colSpan={columns.length}
+                className="text-center text-muted-foreground"
+              >
+                No records found
+              </TableCell>
+            </TableRow>
+          ) : (
+            records.map((rec) => (
+              <TableRow
+                key={rec._id}
+                className="hover:bg-accent transition-all"
+              >
+                {columns.map((col) => (
+                  <TableCell
+                    key={col.key}
+                    className={`${col.mono ? "font-mono text-xs" : ""} ${
+                      col.truncate ? "max-w-xs truncate" : ""
+                    }`}
+                  >
+                    {col.badge ? (
+                      <Badge variant="default">{col.badge}</Badge>
+                    ) : col.date && rec[col.key] ? (
+                      format(new Date(rec[col.key]), "MMM dd, yyyy")
+                    ) : (
+                      rec[col.key] || (col.truncate ? "-" : "")
+                    )}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }

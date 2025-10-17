@@ -1,8 +1,14 @@
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { booksAPI, borrowAPI, copiesAPI } from '@/lib/api';
-import { BookOpen, BookMarked, Library, AlertCircle } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useEffect, useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { booksAPI, borrowAPI, copiesAPI } from "@/lib/api";
+import { BookOpen, BookMarked, Library, AlertCircle } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function LibrarianDashboard() {
   const [stats, setStats] = useState({
@@ -21,18 +27,22 @@ export default function LibrarianDashboard() {
           copiesAPI.list(),
           borrowAPI.list(),
         ]);
-
-        const activeBorrows = borrowsRes.data.filter((b: any) => b.status === 'borrowed').length;
-        const availableCopies = copiesRes.data.filter((c: any) => c.status === 'available').length;
+        console.log(copiesRes.data);
+        const activeBorrows = borrowsRes.data.records.filter(
+          (b: any) => b.returned === false
+        ).length;
+        const availableCopies = copiesRes.data.items.filter(
+          (c: any) => c.is_available === true
+        ).length;
 
         setStats({
           totalBooks: booksRes.data.length,
-          totalCopies: copiesRes.data.length,
+          totalCopies: copiesRes.data.total,
           activeBorrows,
           availableCopies,
         });
       } catch (error) {
-        console.error('Failed to fetch stats:', error);
+        console.error("Failed to fetch stats:", error);
       } finally {
         setLoading(false);
       }
@@ -43,28 +53,28 @@ export default function LibrarianDashboard() {
 
   const statCards = [
     {
-      title: 'Total Books',
+      title: "Total Books",
       value: stats.totalBooks,
       icon: BookOpen,
-      description: 'Unique book titles',
+      description: "Unique book titles",
     },
     {
-      title: 'Total Copies',
+      title: "Total Copies",
       value: stats.totalCopies,
       icon: Library,
-      description: 'Physical copies',
+      description: "Physical copies",
     },
     {
-      title: 'Active Borrows',
+      title: "Active Borrows",
       value: stats.activeBorrows,
       icon: BookMarked,
-      description: 'Currently borrowed',
+      description: "Currently borrowed",
     },
     {
-      title: 'Available Copies',
+      title: "Available Copies",
       value: stats.availableCopies,
       icon: AlertCircle,
-      description: 'Ready to borrow',
+      description: "Ready to borrow",
     },
   ];
 
@@ -79,7 +89,9 @@ export default function LibrarianDashboard() {
         {statCards.map((card) => (
           <Card key={card.title}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {card.title}
+              </CardTitle>
               <card.icon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -88,7 +100,9 @@ export default function LibrarianDashboard() {
               ) : (
                 <>
                   <div className="text-2xl font-bold">{card.value}</div>
-                  <p className="text-xs text-muted-foreground">{card.description}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {card.description}
+                  </p>
                 </>
               )}
             </CardContent>

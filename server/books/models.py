@@ -9,49 +9,39 @@ from datetime import datetime
 # 📘 Book Model
 # ---------------------------------------------------------------------------
 class Book(Document):
-    """
-    Represents the main book entity (title, author, edition, price, etc.).
-    """
-    # Basic information
     title = StringField(required=True, max_length=200)
     author = StringField(required=True, max_length=100)
     category = StringField(max_length=50)
     edition = StringField(max_length=50, default="1st")
     publisher = StringField(max_length=100)
     published_year = IntField()
-
-    # Library-related metadata
-    price = IntField()                          # Cost of the book for the library
-    location = StringField(max_length=100)      # Shelf/rack location (e.g., "Rack A3 - Row 2")
-
-    # Optional additional info
+    price = IntField()
+    location = StringField(max_length=100)
     isbn = StringField(max_length=20)
-    language = StringField(max_length=30, default="English")
+    language = StringField(max_length=30, default="english")  # Keep as is
     no_of_pages = IntField()
-
-    # Media / digital resources
     cover_image_url = StringField()
     ebook_url = StringField()
-
-    # Availability and copies
     total_copies = IntField(default=0)
     available_copies = IntField(default=0)
-
-    # Waitlist (list of user IDs waiting for the book)
     waitlist = ListField(StringField())
-    related_books=ListField(ReferenceField('self'))
-    # Timestamps
+    related_books = ListField(ReferenceField('self'))
     created_at = DateTimeField(default=datetime.utcnow)
-    meta = {
-        "indexes": [
-            # Full-text search on relevant fields
-            {"fields": ["$title", "$author", "$category", "$publisher"], "default_language": "english"},
-            # Optional: single-field indexes for filtering
-            "category",
-            "author",
-            "published_year",
-        ]
-    }
+    
+    # meta = {
+    #     "indexes": [
+    #         # Remove language_override - just use default_language
+    #         {
+    #             "fields": ["$title", "$author", "$category", "$publisher"], 
+    #             "default_language": "english"
+    #             # No language_override parameter
+    #         },
+    #         "category",
+    #         "author",
+    #         "published_year",
+    #         "language",  # Regular index for filtering by language
+    #     ]
+    #}
 
     def __str__(self):
         return f"{self.title} ({self.edition}) by {self.author}"
@@ -66,7 +56,6 @@ class Book(Document):
         if self.available_copies >= count:
             self.available_copies -= count
             self.save()
-
 
 # ---------------------------------------------------------------------------
 # 📗 BookCopy Model

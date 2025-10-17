@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { booksAPI } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,12 +24,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Pencil, Trash2, RefreshCw, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw, UploadCloud } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 
 interface Book {
-  id: string; // <- normalized to `id` (what API returns)
+  id: string;
   title: string;
   author: string;
   isbn: string;
@@ -53,6 +53,11 @@ export default function AdminBooks() {
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [deleteBookId, setDeleteBookId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [uploadTaskId, setUploadTaskId] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<any>(null);
+  const progressInterval = useRef<NodeJS.Timer | null>(null);
+
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -66,7 +71,7 @@ export default function AdminBooks() {
     available_copies: "",
     cover_image_url: "",
     price: "",
-    language: "",
+    language: "english",
     edition: "",
   });
 
@@ -74,7 +79,7 @@ export default function AdminBooks() {
   const fetchBooks = async () => {
     setLoading(true);
     try {
-      const response = await booksAPI.list(); // expects array of { id, ... }
+      const response = await booksAPI.list();
       const data = response.data || [];
       setBooks(data);
       setFilteredBooks(data);
@@ -87,9 +92,12 @@ export default function AdminBooks() {
 
   useEffect(() => {
     fetchBooks();
+    return () => {
+      if (progressInterval.current) clearInterval(progressInterval.current);
+    };
   }, []);
 
-  // Filter books locally for the admin list (still useful)
+  // Filter books locally
   useEffect(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) {
@@ -115,6 +123,7 @@ export default function AdminBooks() {
       })
     );
   }, [searchQuery, books]);
+
   const handleCardClick = (bookId: string) => {
     navigate(`/books/${bookId}`);
   };
@@ -133,7 +142,7 @@ export default function AdminBooks() {
         available_copies: book.available_copies?.toString() || "",
         cover_image_url: book.cover_image_url || "",
         price: book.price?.toString() || "",
-        language: book.language || "",
+        language: book.language || "english",
         edition: book.edition || "",
       });
     } else {
@@ -149,7 +158,7 @@ export default function AdminBooks() {
         available_copies: "",
         cover_image_url: "",
         price: "",
-        language: "",
+        language: "english",
         edition: "",
       });
     }
@@ -190,13 +199,11 @@ export default function AdminBooks() {
     }
   };
 
-  // Open delete confirmation (store id and open dialog)
+  // Delete
   const confirmDelete = (id: string) => {
     setDeleteBookId(id);
     setDeleteDialogOpen(true);
   };
-
-  // Actual delete call
   const handleDelete = async () => {
     if (!deleteBookId) return;
     try {
@@ -210,6 +217,37 @@ export default function AdminBooks() {
     }
   };
 
+  // CSV Upload
+  const handleCsvUpload = async () => {
+    if (!csvFile) return toast.error("Select a CSV file");
+    if (!csvFile.name.endsWith(".csv")) return toast.error("Only CSV allowed");
+
+    const formData = new FormData();
+    formData.append("file", csvFile);
+
+    try {
+      const response = await booksAPI.bulkUpload(formData);
+      const taskId = response.data.task_id;
+      setUploadTaskId(taskId);
+      setUploadProgress({ status: "started", progress: 0 });
+
+      progressInterval.current = setInterval(async () => {
+        const progressRes = await booksAPI.uploadProgress(taskId);
+        setUploadProgress(progressRes.data);
+
+        if (progressRes.data.status === "completed") {
+          toast.success("CSV upload completed!");
+          if (progressInterval.current) clearInterval(progressInterval.current);
+          fetchBooks();
+          setCsvFile(null);
+          setUploadTaskId(null);
+        }
+      }, 2000);
+    } catch (err) {
+      toast.error("Failed to upload CSV");
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -217,7 +255,7 @@ export default function AdminBooks() {
         <div>
           <h1 className="text-3xl font-bold">Books Management</h1>
           <p className="text-muted-foreground">
-            Manage your library’s book collection
+            Manage your library's book collection
           </p>
         </div>
 
@@ -231,12 +269,34 @@ export default function AdminBooks() {
           <Button onClick={fetchBooks} variant="outline" size="icon">
             <RefreshCw className="h-4 w-4" />
           </Button>
+          <Input
+            type="file"
+            accept=".csv"
+            onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+          />
+          <Button
+            onClick={handleCsvUpload}
+            disabled={!csvFile || !!uploadTaskId}
+          >
+            <UploadCloud className="h-4 w-4 mr-2" />
+            Upload CSV
+          </Button>
           <Button onClick={() => handleOpenDialog()}>
             <Plus className="h-4 w-4 mr-2" />
             Add Book
           </Button>
         </div>
       </div>
+
+      {/* CSV Upload Progress */}
+      {uploadProgress && (
+        <div className="p-4 bg-gray-100 rounded-md">
+          <p>Status: {uploadProgress.status}</p>
+          <p>Processed: {uploadProgress.processed}</p>
+          <p>Failed: {uploadProgress.failed}</p>
+          <p>Progress: {uploadProgress.progress.toFixed(2)}%</p>
+        </div>
+      )}
 
       {/* Grid */}
       {loading ? (
@@ -255,7 +315,7 @@ export default function AdminBooks() {
             <Card
               key={book.id}
               className="shadow-sm hover:shadow-md transition-all cursor-pointer"
-              onClick={() => handleCardClick(book.id)} // ✅ navigation
+              onClick={() => handleCardClick(book.id)}
             >
               <CardHeader className="relative">
                 {book.cover_image_url ? (
@@ -274,7 +334,7 @@ export default function AdminBooks() {
                     size="icon"
                     variant="secondary"
                     onClick={(e) => {
-                      e.stopPropagation(); // ✅ Prevent navigation when editing
+                      e.stopPropagation();
                       handleOpenDialog(book);
                     }}
                   >
@@ -284,7 +344,7 @@ export default function AdminBooks() {
                     size="icon"
                     variant="destructive"
                     onClick={(e) => {
-                      e.stopPropagation(); // ✅ Prevent navigation when deleting
+                      e.stopPropagation();
                       confirmDelete(book.id);
                     }}
                   >
@@ -310,7 +370,7 @@ export default function AdminBooks() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingBook ? "Edit Book" : "Add Book"}</DialogTitle>
             <DialogDescription>
@@ -319,30 +379,34 @@ export default function AdminBooks() {
           </DialogHeader>
 
           <form onSubmit={handleSubmit}>
-            <div className="grid gap-3 py-4">
+            <div className="grid gap-4 py-4">
+              {/* Title & Author */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <Label>Title</Label>
+                  <Label>Title *</Label>
                   <Input
                     value={formData.title}
                     onChange={(e) =>
                       setFormData({ ...formData, title: e.target.value })
                     }
+                    placeholder="Enter book title"
                     required
                   />
                 </div>
                 <div>
-                  <Label>Author</Label>
+                  <Label>Author *</Label>
                   <Input
                     value={formData.author}
                     onChange={(e) =>
                       setFormData({ ...formData, author: e.target.value })
                     }
+                    placeholder="Enter author name"
                     required
                   />
                 </div>
               </div>
 
+              {/* Publisher & Published Year */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label>Publisher</Label>
@@ -351,11 +415,13 @@ export default function AdminBooks() {
                     onChange={(e) =>
                       setFormData({ ...formData, publisher: e.target.value })
                     }
+                    placeholder="Enter publisher name"
                   />
                 </div>
                 <div>
                   <Label>Published Year</Label>
                   <Input
+                    type="number"
                     value={formData.published_year}
                     onChange={(e) =>
                       setFormData({
@@ -363,10 +429,105 @@ export default function AdminBooks() {
                         published_year: e.target.value,
                       })
                     }
+                    placeholder="e.g. 2024"
                   />
                 </div>
               </div>
 
+              {/* Category & Language */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label>Category</Label>
+                  <Input
+                    value={formData.category}
+                    onChange={(e) =>
+                      setFormData({ ...formData, category: e.target.value })
+                    }
+                    placeholder="Fiction, Science, History, etc."
+                  />
+                </div>
+                <div>
+                  <Label>Language</Label>
+                  <select
+                    value={formData.language}
+                    onChange={(e) =>
+                      setFormData({ ...formData, language: e.target.value })
+                    }
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="english">English</option>
+                    <option value="spanish">Spanish</option>
+                    <option value="french">French</option>
+                    <option value="german">German</option>
+                    <option value="hindi">Hindi</option>
+                    <option value="telugu">Telugu</option>
+                    <option value="tamil">Tamil</option>
+                    <option value="kannada">Kannada</option>
+                    <option value="malayalam">Malayalam</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Edition & Price */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label>Edition</Label>
+                  <Input
+                    value={formData.edition}
+                    onChange={(e) =>
+                      setFormData({ ...formData, edition: e.target.value })
+                    }
+                    placeholder="1st, 2nd, 3rd..."
+                  />
+                </div>
+                <div>
+                  <Label>Price (₹)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={formData.price}
+                    onChange={(e) =>
+                      setFormData({ ...formData, price: e.target.value })
+                    }
+                    placeholder="Enter price"
+                  />
+                </div>
+              </div>
+
+              {/* Total Copies & Available Copies */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label>Total Copies</Label>
+                  <Input
+                    type="number"
+                    value={formData.total_copies}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        total_copies: e.target.value,
+                      })
+                    }
+                    placeholder="Total number of copies"
+                  />
+                </div>
+                <div>
+                  <Label>Available Copies</Label>
+                  <Input
+                    type="number"
+                    value={formData.available_copies}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        available_copies: e.target.value,
+                      })
+                    }
+                    placeholder="Available copies"
+                  />
+                </div>
+              </div>
+
+              {/* ISBN */}
               <div>
                 <Label>ISBN</Label>
                 <Input
@@ -374,20 +535,41 @@ export default function AdminBooks() {
                   onChange={(e) =>
                     setFormData({ ...formData, isbn: e.target.value })
                   }
+                  placeholder="ISBN-10 or ISBN-13"
                 />
               </div>
 
+              {/* Cover Image URL */}
+              <div>
+                <Label>Cover Image URL</Label>
+                <Input
+                  value={formData.cover_image_url}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      cover_image_url: e.target.value,
+                    })
+                  }
+                  placeholder="https://example.com/cover.jpg"
+                />
+              </div>
+
+              {/* Description */}
               <div>
                 <Label>Description / Notes</Label>
                 <Textarea
                   value={(formData as any).description || ""}
                   onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
+                    setFormData({
+                      ...formData,
+                      description: e.target.value,
+                    } as any)
                   }
+                  placeholder="Brief description or notes about the book"
+                  rows={3}
                 />
               </div>
 
-              {/* Footer */}
               <DialogFooter>
                 <Button
                   type="button"

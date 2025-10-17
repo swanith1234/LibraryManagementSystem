@@ -6,6 +6,15 @@ import json
 from datetime import datetime
 from backend.utils.permissions import require_role
 from mongoengine.queryset.visitor import Q
+from rest_framework.decorators import api_view
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from celery.result import AsyncResult
+from backend.utils.redis_client import redis_client
+from books.task import process_bulk_upload
+import uuid
+
 # -----------------------------------
 # Helper function for parsing JSON safely
 # -----------------------------------
@@ -253,6 +262,7 @@ def create_book_copy(request):
     """Create a new Book Copy"""
     if request.method == "POST":
         data = parse_json(request)
+        print(data)
         if not data:
             return JsonResponse({"error": "Invalid JSON"}, status=400)
 
@@ -454,4 +464,59 @@ def delete_book_copy(request, copy_id):
             return JsonResponse({"error": "Book copy not found"}, status=404)
 
     return JsonResponse({"error": "Invalid HTTP method"}, status=405)
+# books/views.py
 
+
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+import uuid
+
+# ✅ Bulk upload (function-based) - Already correct
+@csrf_exempt
+@require_http_methods(["POST"])
+@require_role('admin', 'librarian')
+def bulk_upload_books(request):
+    """
+    Allows admin to upload thousands of book records at once.
+    Runs in background using Celery.
+    """
+    file = request.FILES.get("file")
+    if not file:
+        return JsonResponse({"error": "No file uploaded"}, status=400)
+    
+    if not file.name.endswith(".csv"):
+        return JsonResponse({"error": "Only CSV files are allowed"}, status=400)
+
+    csv_data = file.read().decode("utf-8")
+    task_id = str(uuid.uuid4())
+
+    # Create a redis entry for progress
+    redis_client.hset(task_id, mapping={
+        "status": "started",
+        "processed": 0,
+        "failed": 0,
+        "progress": 0.0,
+    })
+
+    # Trigger background task
+    process_bulk_upload.delay(csv_data, task_id)
+
+    return JsonResponse({"message": "Upload started", "task_id": task_id}, status=200)
+
+
+# ✅ Upload progress (function-based) - FIXED
+@csrf_exempt
+@require_http_methods(["GET"])
+@require_role('admin', 'librarian')
+def upload_progress(request, task_id):
+    """
+    Returns progress info of an ongoing upload task.
+    """
+    progress = redis_client.hgetall(task_id)
+    if not progress:
+        return JsonResponse({"error": "Invalid or expired task_id"}, status=404)
+    
+    # Decode redis byte values
+    data = {k.decode(): v.decode() for k, v in progress.items()}
+    return JsonResponse(data, status=200)

@@ -77,6 +77,16 @@ export const booksAPI = {
   get: (bookId: string) => api.get(`/books/${bookId}/`),
   update: (bookId: string, data: any) => api.put(`/books/${bookId}/update/`, data),
   delete: (bookId: string) => api.delete(`/books/${bookId}/delete/`),
+  
+  // Bulk upload endpoint
+  bulkUpload: (formData: FormData) =>
+    api.post('/admin/upload-books/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
+  // Upload progress endpoint
+  uploadProgress: (taskId: string) =>
+    api.get(`/admin/upload-progress/${taskId}/`),
 };
 
 // Book Copies endpoints
