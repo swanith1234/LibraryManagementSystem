@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { Search } from 'lucide-react';
 
-// const API_URL = import.meta.env.VITE_API_URL || 'https://librarymanagementsystem-bl3g.onrender.com/api';
-const API_URL ='http://127.0.0.1:8000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://librarymanagementsystem-bl3g.onrender.com/api';
+// const API_URL ='http://127.0.0.1:8000/api';
 
 export const api = axios.create({
   baseURL: API_URL,
