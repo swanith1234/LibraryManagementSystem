@@ -79,9 +79,11 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
+        const startTime = Date.now(); // Record start time
         const res = await usersAPI.summary();
         const data = res.data;
-
+        const endTime = Date.now();
+        console.log(`Dashboard fetch time: ${endTime - startTime} ms`); // Log fetch duration
         // Update stats
         setStats({
           totalUsers: data.total_users,

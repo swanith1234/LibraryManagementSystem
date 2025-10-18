@@ -6,6 +6,7 @@ from backend.utils.auth_utils import generate_access_token, generate_refresh_tok
 from backend.utils.permissions import require_role
 from backend.utils.pagination import paginate
 from backend.utils.json_utils import to_dict, to_dict_list
+from backend.utils.redis_client import redis_client
 import json
 from mongoengine.queryset.visitor import Q
 from datetime import datetime, timedelta
@@ -395,36 +396,35 @@ def get_user_profile(request, user_id):
 
 
 
+
 @csrf_exempt
 def dashboard_summary(request):
-    """
-    Returns all metrics needed for the admin/librarian dashboard.
-    """
+    
+    CACHE_KEY = "dashboard_summary"
+    CACHE_TTL = 60*60  # seconds, adjust as needed
     try:
+        # 1️⃣ Check Redis cache first
+        cached = redis_client.get_progress(CACHE_KEY)
+        if cached:
+            return JsonResponse(cached, status=200)
+
+        # 2️⃣ Compute dashboard data
         today = datetime.utcnow()
         days_30_ago = today - timedelta(days=30)
 
-        # ------------------------------
-        # 1️⃣ Users
-        # ------------------------------
+        # Users
         total_users = User.objects.count()
         new_users_last_30_days = User.objects(created_at__gte=days_30_ago).count()
-
         roles = ["member", "librarian", "admin"]
         role_distribution = {role: User.objects(role=role).count() for role in roles}
 
-        # ------------------------------
-        # 2️⃣ Books
-        # ------------------------------
+        # Books
         total_books = Book.objects.count()
-
-        # Book availability (using total_copies & available_copies fields)
         books_availability = []
         for book in Book.objects:
             total_copies = book.total_copies
             available_copies = book.available_copies
             borrowed_count = total_copies - available_copies
-
             books_availability.append({
                 "title": book.title,
                 "total_copies": total_copies,
@@ -432,12 +432,9 @@ def dashboard_summary(request):
                 "available": available_copies
             })
 
-        # ------------------------------
-        # 3️⃣ Borrows / Transactions
-        # ------------------------------
+        # Borrows / transactions
         active_borrows = BorrowRecord.objects(returned=False).count()
         total_transactions = BorrowRecord.objects.count()
-
         overdue = BorrowRecord.objects(returned=False, due_date__lt=today).count()
         status_distribution = {
             "active": active_borrows,
@@ -451,11 +448,9 @@ def dashboard_summary(request):
             day = today - timedelta(days=i)
             start_day = datetime(day.year, day.month, day.day)
             end_day = start_day + timedelta(days=1)
-
             borrows = BorrowRecord.objects(borrow_date__gte=start_day, borrow_date__lt=end_day).count()
             returns = BorrowRecord.objects(return_date__gte=start_day, return_date__lt=end_day).count()
             overdue_count = BorrowRecord.objects(returned=False, due_date__lt=end_day, borrow_date__lt=end_day).count()
-
             borrow_trend.append({
                 "date": start_day.strftime("%Y-%m-%d"),
                 "borrows": borrows,
@@ -478,7 +473,7 @@ def dashboard_summary(request):
                 "borrow_count": b["borrow_count"]
             })
 
-        # Average borrow duration (days)
+        # Average borrow duration
         borrowed_records = BorrowRecord.objects(returned=True)
         total_days, count_records = 0, 0
         for br in borrowed_records:
@@ -487,10 +482,7 @@ def dashboard_summary(request):
                 count_records += 1
         avg_borrow_duration = (total_days / count_records) if count_records else 0
 
-        # ------------------------------
-        # Return all data
-        # ------------------------------
-        return JsonResponse({
+        response_data = {
             "total_users": total_users,
             "new_users_last_30_days": new_users_last_30_days,
             "role_distribution": role_distribution,
@@ -502,7 +494,13 @@ def dashboard_summary(request):
             "borrow_trend": borrow_trend,
             "top_books": top_books,
             "avg_borrow_duration": round(avg_borrow_duration, 2)
-        }, status=200)
+        }
+
+        # 3️⃣ Store in Redis for next requests
+        redis_client.set_progress(CACHE_KEY, response_data)
+        redis_client.r.setex(CACHE_KEY, CACHE_TTL, json.dumps(response_data))  # optional TTL
+
+        return JsonResponse(response_data, status=200)
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
