@@ -45,15 +45,18 @@ class JWTAuthenticationMiddleware:
         
         return self.get_response(request)
 
-
 # from django.http import JsonResponse
 # from users.models import User
+# from tenants.models import Tenant
 # from backend.utils.auth_utils import decode_token
+# from mongoengine import connect, disconnect
+# from django.conf import settings
+
 
 # class JWTAuthenticationMiddleware:
 #     """
 #     Middleware to authenticate both users and tenants using JWT access token.
-#     Sets request.user and request.user_type
+#     Also dynamically switches the MongoDB connection based on tenant DB name.
 #     """
 
 #     def __init__(self, get_response):
@@ -67,6 +70,7 @@ class JWTAuthenticationMiddleware:
 #         ]
 
 #     def __call__(self, request):
+#         # Skip auth for public routes
 #         if any(request.path.startswith(path) for path in self.exempt_paths):
 #             return self.get_response(request)
 
@@ -79,7 +83,31 @@ class JWTAuthenticationMiddleware:
 #             return JsonResponse({"error": "Invalid or expired token"}, status=401)
 
 #         request.user = user
-#         # Identify type
 #         request.user_type = "tenant" if isinstance(user, Tenant) else "user"
 
-#         return self.get_response(request)
+#         # 🔹 If this is a tenant, dynamically switch DB
+#         if request.user_type == "tenant" and hasattr(user, "db_name"):
+#             try:
+#                 # Disconnect any existing default connection
+#                 disconnect(alias="default")
+
+#                 # Connect to the tenant-specific DB
+#                 connect(
+#                     db=user.db_name,
+#                     alias="default",  # override default connection
+#                     host=settings.MONGO_URI,
+#                 )
+
+#                 request.tenant_db = user.db_name  # optional, for logging/debugging
+
+#             except Exception as e:
+#                 return JsonResponse({"error": f"Database connection failed: {str(e)}"}, status=500)
+
+#         # Continue the request
+#         response = self.get_response(request)
+
+#         # Cleanup (disconnect after response)
+#         if hasattr(request, "tenant_db"):
+#             disconnect(alias="default")
+
+#         return response
