@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { copiesAPI, booksAPI, borrowAPI, usersAPI } from "@/lib/api"; // ✅ include borrowAPI & usersAPI
+import { copiesAPI, booksAPI, borrowAPI, usersAPI } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -27,7 +27,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, RefreshCw, Hand } from "lucide-react"; // ✅ added Hand icon
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  RefreshCw,
+  Hand,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -66,13 +74,14 @@ export default function LibrarianCopies() {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editingCopy, setEditingCopy] = useState<BookCopy | null>(null);
   const [deleteCopyId, setDeleteCopyId] = useState<string | null>(null);
-  const [lendDialogOpen, setLendDialogOpen] = useState(false); // ✅ NEW
-  const [selectedCopy, setSelectedCopy] = useState<BookCopy | null>(null); // ✅ NEW
-  const [userSearch, setUserSearch] = useState(""); // ✅ NEW
-  const [userResults, setUserResults] = useState<User[]>([]); // ✅ NEW
-  const [userLoading, setUserLoading] = useState(false); // ✅ NEW
+  const [lendDialogOpen, setLendDialogOpen] = useState(false);
+  const [selectedCopy, setSelectedCopy] = useState<BookCopy | null>(null);
+  const [userSearch, setUserSearch] = useState("");
+  const [userResults, setUserResults] = useState<User[]>([]);
+  const [userLoading, setUserLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     book_id: "",
@@ -83,8 +92,9 @@ export default function LibrarianCopies() {
 
   const [searchText, setSearchText] = useState("");
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
 
   const fetchData = async () => {
     setLoading(true);
@@ -112,10 +122,10 @@ export default function LibrarianCopies() {
       });
       const data = res.data || res;
       setCopies(data.items || data);
-      console.log("data", data);
-      setTotalPages(
-        data.total_pages || Math.ceil((data.total || data.length) / pageSize)
-      );
+
+      const total = data.total || data.length || 0;
+      setTotalItems(total);
+      setTotalPages(data.total_pages || Math.ceil(total / pageSize));
     } catch (error) {
       toast.error("Failed to fetch copies");
     } finally {
@@ -125,13 +135,13 @@ export default function LibrarianCopies() {
 
   useEffect(() => {
     fetchCopies();
-  }, [searchText, page]);
+  }, [searchText, page, pageSize]);
 
   useEffect(() => {
     fetchData();
   }, []);
 
-  // ✅ NEW: Handle user search
+  // Handle user search
   const handleUserSearch = async (query: string) => {
     setUserSearch(query);
     if (!query.trim()) {
@@ -141,9 +151,7 @@ export default function LibrarianCopies() {
 
     setUserLoading(true);
     try {
-      console.log("Searching users with query:", query);
-      const res = await usersAPI.search(query); // expects ?search=username
-      console.log(res.data);
+      const res = await usersAPI.search(query);
       setUserResults(res.data.users || res.data || []);
     } catch {
       toast.error("Failed to fetch users");
@@ -152,10 +160,8 @@ export default function LibrarianCopies() {
     }
   };
 
-  // ✅ NEW: Lend copy to selected user
+  // Lend copy to selected user
   const handleLend = async (userId: string) => {
-    console.log("Lending copy to user ID:", userId);
-    console.log("Selected copy:", selectedCopy);
     if (!selectedCopy) return;
     try {
       await borrowAPI.borrow({
@@ -164,6 +170,8 @@ export default function LibrarianCopies() {
       });
       toast.success("Book copy lent successfully!");
       setLendDialogOpen(false);
+      setUserSearch("");
+      setUserResults([]);
       fetchCopies();
     } catch (error) {
       toast.error("Failed to lend copy");
@@ -202,7 +210,8 @@ export default function LibrarianCopies() {
         toast.success("Copy created successfully");
       }
       setDialogOpen(false);
-      fetchData();
+      setPage(1);
+      fetchCopies();
     } catch {
       toast.error(
         editingCopy ? "Failed to update copy" : "Failed to create copy"
@@ -215,8 +224,9 @@ export default function LibrarianCopies() {
     try {
       await copiesAPI.delete(deleteCopyId);
       toast.success("Copy deleted successfully");
+      setDeleteDialogOpen(false);
       setDeleteCopyId(null);
-      fetchData();
+      fetchCopies();
     } catch {
       toast.error("Failed to delete copy");
     }
@@ -233,10 +243,13 @@ export default function LibrarianCopies() {
     }
   };
 
+  const startItem = (page - 1) * pageSize + 1;
+  const endItem = Math.min(page * pageSize, totalItems);
+
   return (
     <div className="space-y-6">
       {/* Header + Search */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Book Copies</h1>
           <p className="text-muted-foreground">Manage physical book copies</p>
@@ -340,7 +353,10 @@ export default function LibrarianCopies() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => setDeleteCopyId(copy.id)}
+                        onClick={() => {
+                          setDeleteCopyId(copy.id);
+                          setDeleteDialogOpen(true);
+                        }}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -353,13 +369,205 @@ export default function LibrarianCopies() {
         </Table>
       </div>
 
-      {/* ✅ NEW: Lend Dialog */}
+      {/* Pagination Footer */}
+      <div className="flex items-center justify-between px-4 py-4 border rounded-md bg-muted/50">
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-muted-foreground">
+            Showing {startItem}-{endItem} of {totalItems} copies
+          </span>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="page-size" className="text-sm">
+              Per page:
+            </Label>
+            <Select
+              value={pageSize.toString()}
+              onValueChange={(val) => {
+                setPageSize(parseInt(val));
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5">5</SelectItem>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage(Math.max(1, page - 1))}
+            disabled={page === 1}
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Previous
+          </Button>
+
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum;
+              if (totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (page <= 3) {
+                pageNum = i + 1;
+              } else if (page >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
+              } else {
+                pageNum = page - 2 + i;
+              }
+              return (
+                <Button
+                  key={pageNum}
+                  variant={page === pageNum ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setPage(pageNum)}
+                  className="w-9 h-9 p-0"
+                >
+                  {pageNum}
+                </Button>
+              );
+            })}
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage(Math.min(totalPages, page + 1))}
+            disabled={page === totalPages}
+          >
+            Next
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Add/Edit Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingCopy ? "Edit Copy" : "Add Copy"}</DialogTitle>
+            <DialogDescription>
+              {editingCopy
+                ? "Update the book copy details"
+                : "Create a new book copy"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-4">
+              <div>
+                <Label>Book *</Label>
+                <Select
+                  value={formData.book_id}
+                  onValueChange={(val) =>
+                    setFormData({ ...formData, book_id: val })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a book" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {books.map((book) => (
+                      <SelectItem key={book.id} value={book.id}>
+                        {book.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Barcode *</Label>
+                <Input
+                  value={formData.barcode}
+                  onChange={(e) =>
+                    setFormData({ ...formData, barcode: e.target.value })
+                  }
+                  placeholder="Enter barcode"
+                  required
+                />
+              </div>
+
+              <div>
+                <Label>Condition</Label>
+                <Select
+                  value={formData.condition}
+                  onValueChange={(val) =>
+                    setFormData({ ...formData, condition: val })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="excellent">Excellent</SelectItem>
+                    <SelectItem value="good">Good</SelectItem>
+                    <SelectItem value="fair">Fair</SelectItem>
+                    <SelectItem value="poor">Poor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Available</Label>
+                <Select
+                  value={formData.is_available.toString()}
+                  onValueChange={(val) =>
+                    setFormData({ ...formData, is_available: val === "true" })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Available</SelectItem>
+                    <SelectItem value="false">Borrowed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <DialogFooter className="mt-6">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">{editingCopy ? "Update" : "Create"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Copy?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The book copy will be permanently
+              deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Lend Dialog */}
       <Dialog open={lendDialogOpen} onOpenChange={setLendDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Lend Book Copy</DialogTitle>
             <DialogDescription>
-              Search for a user to lend this copy.
+              Search for a user to lend this copy to.
             </DialogDescription>
           </DialogHeader>
 
@@ -378,7 +586,7 @@ export default function LibrarianCopies() {
                 userResults.map((user) => (
                   <div
                     key={user.id}
-                    className="p-2 rounded-md hover:bg-accent cursor-pointer"
+                    className="p-2 rounded-md hover:bg-accent cursor-pointer transition-colors"
                     onClick={() => handleLend(user.id)}
                   >
                     <p className="font-medium">{user.username}</p>

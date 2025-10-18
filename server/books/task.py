@@ -21,7 +21,7 @@ def process_bulk_upload(self, csv_data_str, task_id):
 
     # Re-read since we exhausted iterator
     reader = csv.DictReader(io.StringIO(csv_data_str))
-
+    print(reader)
     for row in reader:
         try:
             # Try to find the book by title & author

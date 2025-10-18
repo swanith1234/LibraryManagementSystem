@@ -533,6 +533,7 @@ def search_borrows(request):
         return JsonResponse({"error": "Internal Server Error"}, status=500)
 
 @csrf_exempt
+
 def get_user_borrow_history(request):
     """
     Fetch borrow records for a specific user.

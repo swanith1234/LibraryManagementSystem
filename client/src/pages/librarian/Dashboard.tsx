@@ -22,24 +22,25 @@ export default function LibrarianDashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [booksRes, copiesRes, borrowsRes] = await Promise.all([
-          booksAPI.list(),
-          copiesAPI.list(),
-          borrowAPI.list(),
-        ]);
-        console.log(copiesRes.data);
-        const activeBorrows = borrowsRes.data.records.filter(
-          (b: any) => b.returned === false
-        ).length;
-        const availableCopies = copiesRes.data.items.filter(
-          (c: any) => c.is_available === true
-        ).length;
-
+        // const [booksRes, copiesRes, borrowsRes] = await Promise.all([
+        //   booksAPI.list(),
+        //   copiesAPI.list(),
+        //   borrowAPI.list(),
+        // ]);
+        // console.log(copiesRes.data);
+        // const activeBorrows = borrowsRes.data.records.filter(
+        //   (b: any) => b.returned === false
+        // ).length;
+        // const availableCopies = copiesRes.data.items.filter(
+        //   (c: any) => c.is_available === true
+        // ).length;
+        const res = await booksAPI.libraryStats();
+        console.log(res);
         setStats({
-          totalBooks: booksRes.data.length,
-          totalCopies: copiesRes.data.total,
-          activeBorrows,
-          availableCopies,
+          totalBooks: res.data.totalBooks,
+          totalCopies: res.data.totalCopies,
+          activeBorrows: res.data.activeBorrows,
+          availableCopies: res.data.availableCopies,
         });
       } catch (error) {
         console.error("Failed to fetch stats:", error);

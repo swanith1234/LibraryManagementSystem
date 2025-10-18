@@ -40,8 +40,10 @@ INSTALLED_APPS = [
     'books',
     'users',
     'borrow',
+    #  'tenants',
     'drf_yasg',  # For Swagger documentation
     'corsheaders',
+    
 ]
 
 MIDDLEWARE = [

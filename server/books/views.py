@@ -13,6 +13,7 @@ from rest_framework import status
 from celery.result import AsyncResult
 from backend.utils.redis_client import redis_client
 from books.task import process_bulk_upload
+from borrow.models import BorrowRecord
 import uuid
 
 # -----------------------------------
@@ -169,7 +170,7 @@ def homepage_books(request):
             }
             for b in books
         ]
-
+    print(result)
     return JsonResponse(result)
 
 
@@ -379,6 +380,20 @@ def list_book_copies(request):
         "total_pages": (total + page_size - 1) // page_size,
         "current_page": page,
     })
+@csrf_exempt
+@api_view(["GET"])
+def library_stats(request):
+    total_copies = BookCopy.objects.count()
+    available_copies = BookCopy.objects.filter(is_available=True).count()
+    total_books = Book.objects.count()
+    active_borrows = BorrowRecord.objects.filter(returned=False).count()
+
+    return Response({
+        "totalBooks": total_books,
+        "totalCopies": total_copies,
+        "availableCopies": available_copies,
+        "activeBorrows": active_borrows
+    })
 
 @csrf_exempt
 def get_book_copy(request, copy_id):
@@ -500,7 +515,7 @@ def bulk_upload_books(request):
     })
 
     # Trigger background task
-    process_bulk_upload.delay(csv_data, task_id)
+    process_bulk_upload(csv_data, task_id)
 
     return JsonResponse({"message": "Upload started", "task_id": task_id}, status=200)
 

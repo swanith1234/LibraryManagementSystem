@@ -28,6 +28,7 @@ urlpatterns = [
     path('api/', include('books.urls')),
     path('api/users/', include('users.urls')),
     path('api/borrow/', include('borrow.urls')),
+    path('api/tenants/', include('tenants.urls')),
 
     # Swagger & Redoc
     re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),

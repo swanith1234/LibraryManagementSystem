@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { Search } from 'lucide-react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://librarymanagementsystem-bl3g.onrender.com/api';
-// const API_URL ='http://127.0.0.1:8000/api';
+// const API_URL = import.meta.env.VITE_API_URL || 'https://librarymanagementsystem-bl3g.onrender.com/api';
+const API_URL ='http://127.0.0.1:8000/api';
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -77,7 +77,7 @@ export const booksAPI = {
   get: (bookId: string) => api.get(`/books/${bookId}/`),
   update: (bookId: string, data: any) => api.put(`/books/${bookId}/update/`, data),
   delete: (bookId: string) => api.delete(`/books/${bookId}/delete/`),
-  
+  libraryStats:()=>api.get('/library_stats/'),
   // Bulk upload endpoint
   bulkUpload: (formData: FormData) =>
     api.post('/admin/upload-books/', formData, {

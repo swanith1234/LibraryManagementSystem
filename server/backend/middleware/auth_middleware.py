@@ -44,3 +44,42 @@ class JWTAuthenticationMiddleware:
             return JsonResponse({"error": "Invalid or expired token"}, status=401)
         
         return self.get_response(request)
+
+
+# from django.http import JsonResponse
+# from users.models import User
+# from backend.utils.auth_utils import decode_token
+
+# class JWTAuthenticationMiddleware:
+#     """
+#     Middleware to authenticate both users and tenants using JWT access token.
+#     Sets request.user and request.user_type
+#     """
+
+#     def __init__(self, get_response):
+#         self.get_response = get_response
+#         self.exempt_paths = [
+#             '/swagger/', '/swagger.json', '/swagger.yaml',
+#             '/redoc/', '/admin/',
+#             "/api/users/login/", "/api/users/register/",
+#             "/api/users/forgot-password/", "/api/users/reset-password/",
+#             "/api/tenants/register/", "/api/tenants/verify-email/",
+#         ]
+
+#     def __call__(self, request):
+#         if any(request.path.startswith(path) for path in self.exempt_paths):
+#             return self.get_response(request)
+
+#         token = request.COOKIES.get("access_token") or request.headers.get("Authorization")
+#         if token and token.startswith("Bearer "):
+#             token = token[7:]
+
+#         user = decode_token(token)
+#         if user is None:
+#             return JsonResponse({"error": "Invalid or expired token"}, status=401)
+
+#         request.user = user
+#         # Identify type
+#         request.user_type = "tenant" if isinstance(user, Tenant) else "user"
+
+#         return self.get_response(request)

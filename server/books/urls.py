@@ -22,5 +22,6 @@ urlpatterns = [
     path('copies/<str:copy_id>/delete/', views.delete_book_copy, name='delete_book_copy'),
     path('admin/upload-books/', views.bulk_upload_books, name='bulk_upload_books'),
     path('admin/upload-progress/<str:task_id>/', views.upload_progress, name='upload_progress'),
+    path('library_stats/', views.library_stats, name='library_stats'),
     
 ]
