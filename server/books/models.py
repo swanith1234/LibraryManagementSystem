@@ -3,11 +3,6 @@ from mongoengine import (
     BooleanField, DateTimeField, ListField
 )
 from datetime import datetime
-
-
-# ---------------------------------------------------------------------------
-# 📘 Book Model
-# ---------------------------------------------------------------------------
 class Book(Document):
     title = StringField(required=True, max_length=200)
     author = StringField(required=True, max_length=100)
@@ -18,7 +13,7 @@ class Book(Document):
     price = IntField()
     location = StringField(max_length=100)
     isbn = StringField(max_length=20)
-    language = StringField(max_length=30, default="english")  # Keep as is
+    language = StringField(max_length=30, default="english")
     no_of_pages = IntField()
     cover_image_url = StringField()
     ebook_url = StringField()
@@ -27,26 +22,25 @@ class Book(Document):
     waitlist = ListField(StringField())
     related_books = ListField(ReferenceField('self'))
     created_at = DateTimeField(default=datetime.utcnow)
-    
-    # meta = {
-    #     "indexes": [
-    #         # Remove language_override - just use default_language
-    #         {
-    #             "fields": ["$title", "$author", "$category", "$publisher"], 
-    #             "default_language": "english"
-    #             # No language_override parameter
-    #         },
-    #         "category",
-    #         "author",
-    #         "published_year",
-    #         "language",  # Regular index for filtering by language
-    #     ]
-    #}
+
+    meta = {
+        "indexes": [
+            # ✅ Full-text search index
+            {
+                "fields": ["$title", "$author", "$category", "$publisher"],
+                "default_language": "english",
+            },
+            # ✅ Additional useful filters
+            "category",
+            "author",
+            "published_year",
+            "language",
+        ]
+    }
 
     def __str__(self):
         return f"{self.title} ({self.edition}) by {self.author}"
 
-    # Update counters safely
     def increment_copies(self, count=1):
         self.total_copies += count
         self.available_copies += count

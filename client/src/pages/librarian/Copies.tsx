@@ -255,7 +255,7 @@ export default function LibrarianCopies() {
           <p className="text-muted-foreground">Manage physical book copies</p>
         </div>
         <Input
-          placeholder="Search by title, barcode, category..."
+          placeholder="Search by entering full barcode"
           value={searchText}
           onChange={(e) => {
             setSearchText(e.target.value);
